@@ -34,6 +34,8 @@ If the tap or project repository is private, your GitHub account must have acces
 
 The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. The API key is saved in macOS Keychain. The tunnel ID and workspace are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
 
+Select the eye button next to a saved API key to reveal it after macOS device authentication. Touch ID or the device password can be used when available. This feature requires Apple's Swift command-line tools.
+
 For the interactive terminal flow, run `./start-tunnel.sh --cli` from a project checkout.
 
 ## Connect ChatGPT

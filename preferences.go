@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -9,10 +10,33 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const keychainService = "chatgpt-local-workspace.runtime-api-key"
 const keychainAccount = "runtime"
+
+// LocalAuthentication uses Touch ID when available and permits the system
+// password fallback. The secret is returned only after successful verification.
+func authenticateDevice() error {
+	const script = `import LocalAuthentication
+import Foundation
+import Dispatch
+let context = LAContext()
+var error: NSError?
+guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { exit(1) }
+let done = DispatchSemaphore(value: 0)
+var verified = false
+context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Show your saved tunnel API key") { success, _ in
+    verified = success
+    done.signal()
+}
+if done.wait(timeout: .now() + 90) == .timedOut { exit(1) }
+exit(verified ? 0 : 1)`
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, "/usr/bin/swift", "-e", script).Run()
+}
 
 type savedPreferences struct {
 	Tunnel    string `json:"tunnel"`

@@ -34,6 +34,7 @@ type webManager struct {
 	binary                            string
 	key                               string
 	saveKey                           func(string) error
+	authenticate                      func() error
 }
 type webSettings struct {
 	Tunnel    string `json:"tunnel"`
@@ -253,6 +254,28 @@ func (m *webManager) handler() http.Handler {
 		}
 		m.stop(w, r)
 	})
+	mux.HandleFunc("/api/reveal-key", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		m.mu.Lock()
+		hasKey, authenticate := m.key != "", m.authenticate
+		m.mu.Unlock()
+		if !hasKey || authenticate == nil {
+			http.Error(w, "No saved key or device authentication is unavailable.", http.StatusBadRequest)
+			return
+		}
+		if err := authenticate(); err != nil {
+			http.Error(w, "Device authentication was cancelled or failed.", http.StatusForbidden)
+			return
+		}
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"key": m.key})
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil || host != "127.0.0.1" {
@@ -275,6 +298,7 @@ func runWeb() {
 	m := &webManager{state: "stopped", token: hex.EncodeToString(b), binary: binary}
 	if runtime.GOOS == "darwin" {
 		m.saveKey = saveKeychainKey
+		m.authenticate = authenticateDevice
 		m.key, _ = loadKeychainKey()
 		m.tunnel, m.workspace = loadWebPreferences()
 	}

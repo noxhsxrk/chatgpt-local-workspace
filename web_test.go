@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -109,5 +110,26 @@ func TestDiagnosticsRedactSecrets(t *testing.T) {
 	got := log.safeMessage("arbitrary-private-key")
 	if strings.Contains(got, "arbitrary-private-key") || strings.Contains(got, "sk-other-secret") {
 		t.Fatalf("secret leaked: %s", got)
+	}
+}
+
+func TestRevealRequiresSuccessfulAuthentication(t *testing.T) {
+	m := &webManager{token: "csrf", key: "saved-secret", authenticate: func() error { return errors.New("cancelled") }}
+	reveal := func(token string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "http://127.0.0.1:1234/api/reveal-key", nil)
+		r.Header.Set("X-Workspace-Token", token)
+		w := httptest.NewRecorder()
+		m.handler().ServeHTTP(w, r)
+		return w
+	}
+	for _, w := range []*httptest.ResponseRecorder{reveal("bad"), reveal("csrf")} {
+		if w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), "saved-secret") {
+			t.Fatalf("authentication failure leaked key: %d %s", w.Code, w.Body)
+		}
+	}
+	m.authenticate = func() error { return nil }
+	w := reveal("csrf")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "saved-secret") || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("authenticated reveal failed")
 	}
 }
