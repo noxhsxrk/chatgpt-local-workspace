@@ -372,6 +372,155 @@ func (m *webManager) handler() http.Handler {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"enabled": true, "estimate": u})
 	})
+	mux.HandleFunc("/api/skills", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != "GET" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		root, err := skillRoot()
+		if err != nil {
+			http.Error(w, "Could not locate skill library.", 500)
+			return
+		}
+		skills, err := listSkills(root)
+		if err != nil {
+			http.Error(w, "Could not read skill library.", 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(skills)
+	})
+	mux.HandleFunc("/api/skills/install", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input); err != nil {
+			http.Error(w, "Invalid request.", 400)
+			return
+		}
+		root, err := skillRoot()
+		if err != nil {
+			http.Error(w, "Could not locate skill library.", 500)
+			return
+		}
+		skill, err := installSkill(root, input.Path)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(skill)
+	})
+	mux.HandleFunc("/api/skills/remove", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input); err != nil {
+			http.Error(w, "Invalid request.", 400)
+			return
+		}
+		root, err := skillRoot()
+		if err != nil {
+			http.Error(w, "Could not locate skill library.", 500)
+			return
+		}
+		if err := removeSkill(root, input.Name); err != nil {
+			http.Error(w, "Could not remove skill.", 400)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != "GET" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		root, err := agentRoot()
+		if err != nil {
+			http.Error(w, "Could not locate agent profiles.", 500)
+			return
+		}
+		profiles, err := listAgents(root)
+		if err != nil {
+			http.Error(w, "Could not read agent profiles.", 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(profiles)
+	})
+	mux.HandleFunc("/api/agents/get", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != "GET" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		root, err := agentRoot()
+		if err != nil {
+			http.Error(w, "Could not locate agent profiles.", 500)
+			return
+		}
+		profile, err := readAgent(root, r.URL.Query().Get("name"))
+		if err != nil {
+			http.Error(w, "Agent profile not found.", 404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(profile)
+	})
+	mux.HandleFunc("/api/agents/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var profile agentProfile
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 40<<10)).Decode(&profile); err != nil {
+			http.Error(w, "Invalid request.", 400)
+			return
+		}
+		root, err := agentRoot()
+		if err != nil {
+			http.Error(w, "Could not locate agent profiles.", 500)
+			return
+		}
+		if err := saveAgent(root, profile); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/api/agents/remove", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input); err != nil {
+			http.Error(w, "Invalid request.", 400)
+			return
+		}
+		root, err := agentRoot()
+		if err != nil {
+			http.Error(w, "Could not locate agent profiles.", 500)
+			return
+		}
+		if err := removeAgent(root, input.Name); err != nil {
+			http.Error(w, "Could not remove agent profile.", 400)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil || host != "127.0.0.1" {

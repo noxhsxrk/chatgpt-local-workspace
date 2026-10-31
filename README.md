@@ -70,10 +70,16 @@ To inspect MCP traffic, enable **Record MCP requests and responses** before star
 
 The optional **MCP traffic estimate** uses the current connection's recorded tool-call arguments and results. It approximates one token per four UTF-8 bytes and applies GPT-6 Luna standard short-context API rates ($0.10 input and $0.50 output per million tokens, checked October 31, 2026). It does not measure actual model usage or charges, and excludes chat history, reasoning, repeated context, caching, and traffic not present in the log. Estimates can be especially inaccurate for Thai and code. Check [current API pricing](https://developers.openai.com/api/docs/pricing) before using the comparison.
 
+## Skills and agent profiles
+
+Open **Agent skills** in the local app to install a trusted local folder containing `SKILL.md`. The app copies the package to its managed library; GitHub installation and automatic approval policies are not yet supported. ChatGPT can list and read installed skills through the MCP tools. Skill instructions are untrusted third-party content and do not grant extra permissions.
+
+Open **Agent profiles** to save reusable instructions for ChatGPT. Profiles do not launch autonomous agents or models and cannot grant additional tool permissions. Do not put secrets in profile instructions. After updating, refresh or recreate the ChatGPT custom MCP connection if its new tools do not appear.
+
 If ChatGPT reports that the MCP server is not initialized, make sure only one `tunnel-client` process is using this tunnel, restart the connection, and try a new chat. A running process does not by itself confirm that the tunnel is connected. Also verify that the ChatGPT plugin uses the same tunnel ID and workspace association.
 
 ## Notes
 
 - Start with a test folder without sensitive files. The server can create and overwrite files without its own approval prompt.
-- The server does not run shell commands, tests, or web servers. It is a prototype, not a production-hardened sandbox.
+- The MCP tools cannot run shell commands, tests, or project web servers. The server is a prototype, not a production-hardened sandbox.
 - Custom MCP access depends on your ChatGPT plan and workspace permissions. The tunnel does not provide unlimited usage.
