@@ -4,6 +4,7 @@ class ChatgptLocalWorkspace < Formula
   url "ssh://git@github.com/noxhsxrk/chatgpt-local-workspace.git",
       revision: "8d0300431c3fd376bc8a045bb963bd737ec5f46f"
   version "0.1.0"
+  revision 1
 
   depends_on "go" => :build
   depends_on "openai/tools/tunnel-client"
@@ -11,8 +12,12 @@ class ChatgptLocalWorkspace < Formula
   def install
     system "go", "build", *std_go_args(output: libexec/"workspace-mcp"), "."
     libexec.install "start-tunnel.sh"
-    bin.install_env_script libexec/"start-tunnel.sh", WORKSPACE_MCP_BINARY: libexec/"workspace-mcp"
-    mv bin/"start-tunnel.sh", bin/"chatgpt-local-workspace"
+    (bin/"chatgpt-local-workspace").write <<~EOS
+      #!/bin/bash
+      export WORKSPACE_MCP_BINARY="#{libexec}/workspace-mcp"
+      exec /bin/bash "#{libexec}/start-tunnel.sh" "$@"
+    EOS
+    chmod 0755, bin/"chatgpt-local-workspace"
   end
 
   test do
