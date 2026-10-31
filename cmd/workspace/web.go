@@ -280,6 +280,20 @@ func (m *webManager) handler() http.Handler {
 		}
 		m.status(w, r)
 	})
+	mux.HandleFunc("/api/update", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodGet || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		info, err := appUpdates.check(r.Context())
+		if err != nil {
+			http.Error(w, "Could not check for updates.", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(info)
+	})
 	mux.HandleFunc("/api/start", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
 			http.Error(w, "Forbidden", 403)
