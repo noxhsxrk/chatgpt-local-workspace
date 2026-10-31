@@ -1,7 +1,7 @@
 class ChatgptLocalWorkspace < Formula
   desc "Connect a local workspace to ChatGPT through an MCP tunnel"
   homepage "https://github.com/noxhsxrk/chatgpt-local-workspace"
-  url "git@github.com:noxhsxrk/chatgpt-local-workspace.git",
+  url "ssh://git@github.com/noxhsxrk/chatgpt-local-workspace.git",
       revision: "8d0300431c3fd376bc8a045bb963bd737ec5f46f"
   version "0.1.0"
 
