@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-//go:embed web/index.html
+//go:embed web/index.html assets/*.png
 var webAssets embed.FS
 
 type webManager struct {
@@ -222,6 +222,7 @@ func (m *webManager) stop(w http.ResponseWriter, r *http.Request) {
 }
 func (m *webManager) handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("/assets/", http.FileServer(http.FS(webAssets)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

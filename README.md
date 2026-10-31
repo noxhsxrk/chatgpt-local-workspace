@@ -22,15 +22,27 @@ If the tap or project repository is private, your GitHub account must have acces
 
 ## Setup
 
-1. In [OpenAI Platform](https://platform.openai.com/settings/organization/tunnels), create a tunnel and associate it with your ChatGPT workspace. Save the tunnel ID.
-2. Create a runtime API key with **Tunnels Read + Use** permissions. Keep it private.
-3. Start the app. If installed with Homebrew, run `chatgpt-local-workspace`. If using a project checkout, open Terminal in the project directory and run:
+### 1. Create a tunnel
+
+In [OpenAI Platform](https://platform.openai.com/settings/organization/tunnels), create a tunnel, select your organization and ChatGPT workspace, then save the tunnel ID.
+
+![Create tunnel dialog showing organization and ChatGPT workspace selection](assets/create_tunnel_menu.png)
+
+### 2. Create a runtime API key
+
+Open [API keys](https://platform.openai.com/api-keys), create a runtime key with **Tunnels Read + Use** permissions, and save it somewhere secure. The screenshot shows the creation form; select restricted permissions where available.
+
+![Create new secret key dialog](assets/create_api_key_menu.png)
+
+### 3. Start the connection
+
+If installed with Homebrew, run `chatgpt-local-workspace`. If using a project checkout, open Terminal in the project directory and run:
 
    ```bash
    ./start-tunnel.sh
    ```
 
-4. The app opens in your browser automatically. If it does not, open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**.
+The app opens in your browser automatically. If it does not, open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**. Start with a test folder: the server can read and overwrite files in the selected workspace.
 
 The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. The API key is saved in macOS Keychain. The tunnel ID and workspace are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
 
@@ -43,9 +55,15 @@ For the interactive terminal flow, run `./start-tunnel.sh --cli` from a project 
 1. In ChatGPT, open **Plugins** and choose **Add custom MCP server**.
 2. Under **Connection**, choose **Tunnel** and select or enter your tunnel ID.
 3. Configure authentication if required, then create the plugin.
-4. Test it by asking ChatGPT to list the files in your workspace.
+4. Open a chat, select the plugin, and ask it to list the files in your workspace. Confirm that the response contains actual file names.
+
+![ChatGPT Add custom MCP server dialog with Tunnel selected](assets/create_custom_mcp.png)
+
+The screenshot shows OAuth selected as an example. This server does not provide OAuth; choose no authentication if that option is available, rather than copying the OAuth selection in the image.
 
 For troubleshooting, see the [OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
+
+If ChatGPT reports that the MCP server is not initialized, make sure only one `tunnel-client` process is using this tunnel, restart the connection, and try a new chat. A running process does not by itself confirm that the tunnel is connected. Also verify that the ChatGPT plugin uses the same tunnel ID and workspace association.
 
 ## Notes
 

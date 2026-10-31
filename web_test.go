@@ -133,3 +133,15 @@ func TestRevealRequiresSuccessfulAuthentication(t *testing.T) {
 		t.Fatal("authenticated reveal failed")
 	}
 }
+
+func TestEmbeddedGuideImages(t *testing.T) {
+	m := &webManager{token: "secret"}
+	for _, path := range []string{"/assets/create_tunnel_menu.png", "/assets/create_api_key_menu.png", "/assets/create_custom_mcp.png"} {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:1234"+path, nil)
+		w := httptest.NewRecorder()
+		m.handler().ServeHTTP(w, r)
+		if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "image/png") || w.Body.Len() == 0 {
+			t.Fatalf("image %s: status %d, content type %s", path, w.Code, w.Header().Get("Content-Type"))
+		}
+	}
+}
