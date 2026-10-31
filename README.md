@@ -14,6 +14,7 @@ Install and start the app with:
 
 ```bash
 brew tap noxhsxrk/nox
+brew trust --tap noxhsxrk/nox
 brew install noxhsxrk/nox/chatgpt-local-workspace
 chatgpt-local-workspace
 ```
