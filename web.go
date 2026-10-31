@@ -86,7 +86,8 @@ func (m *webManager) status(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel})
+	home, _ := os.UserHomeDir()
+	json.NewEncoder(w).Encode(map[string]string{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home})
 }
 func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 	var s webSettings
