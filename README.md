@@ -10,11 +10,11 @@ A small Go MCP server that lets ChatGPT list, read, and write files in a local w
 
 ## Install with Homebrew
 
-After the `noxhsxrk/homebrew-tap` repository has been created and pushed, install and start the app with:
+Install and start the app with:
 
 ```bash
-brew tap noxhsxrk/tap git@github.com:noxhsxrk/homebrew-tap.git
-brew install noxhsxrk/tap/chatgpt-local-workspace
+brew tap noxhsxrk/nox
+brew install noxhsxrk/nox/chatgpt-local-workspace
 chatgpt-local-workspace
 ```
 
