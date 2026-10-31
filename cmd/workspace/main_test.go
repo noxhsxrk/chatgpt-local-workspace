@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestWorkspaceReadWriteAndSandbox(t *testing.T) {
@@ -78,5 +79,70 @@ func TestSearchTextIsBoundedToWorkspaceAndSkipsSecrets(t *testing.T) {
 	}
 	if result = s.call("search_text", []byte(`{"query":""}`)); !result.IsError {
 		t.Fatal("empty query accepted")
+	}
+}
+
+func TestSkillDiscoveryAdvertisesInstalledCatalog(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root, err := skillRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "pdf"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "pdf", "SKILL.md"), []byte("---\nname: pdf\ndescription: Work with PDF files.\n---\nPDF instructions"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s := &server{}
+	init := s.handle(jsonrpcRequest{Method: "initialize"}).(map[string]any)
+	if !strings.Contains(init["instructions"].(string), "skills_list") {
+		t.Fatal("missing discovery instructions")
+	}
+	tools := s.handle(jsonrpcRequest{Method: "tools/list"}).(map[string]any)["tools"].([]any)
+	var catalog string
+	for _, entry := range tools {
+		tool := entry.(map[string]any)
+		if tool["name"] == "skills_list" {
+			catalog = tool["description"].(string)
+		}
+	}
+	if !strings.Contains(catalog, `"name":"pdf"`) || !strings.Contains(catalog, "PDF files") {
+		t.Fatalf("missing installed skill: %s", catalog)
+	}
+	result := s.call("skills_read", []byte(`{"name":"pdf"}`))
+	if result.IsError || !strings.Contains(result.Content[0].Text, "PDF instructions") {
+		t.Fatalf("skill read: %+v", result)
+	}
+}
+
+func TestSkillCatalogChangeNotification(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root, err := skillRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	defer close(done)
+	notifications := make(chan struct{}, 2)
+	go watchSkillCatalog(done, 10*time.Millisecond, skillCatalogHint(), func() { notifications <- struct{}{} })
+	if err := os.Mkdir(filepath.Join(root, "pdf"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "pdf", "SKILL.md"), []byte("---\nname: pdf\ndescription: PDF tasks\n---\nInstructions"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-notifications:
+	case <-time.After(2 * time.Second):
+		t.Fatal("skill change was not reported")
+	}
+	s := &server{}
+	init := s.handle(jsonrpcRequest{Method: "initialize"}).(map[string]any)
+	caps := init["capabilities"].(map[string]any)["tools"].(map[string]any)
+	if caps["listChanged"] != true {
+		t.Fatal("tools list change capability is missing")
 	}
 }

@@ -78,7 +78,7 @@ The optional **MCP traffic estimate** uses the current connection's recorded too
 
 ## Skills and agent profiles
 
-Open **Agent skills** in the local app to search skills.sh or install a local folder containing `SKILL.md`. Online skills are downloaded from their public GitHub repositories. Review the source before installing; the app does not execute bundled scripts automatically. ChatGPT can list and read installed skills through the MCP tools. Automatic approval policies are not yet supported.
+Open **Agent skills** in the local app to search skills.sh or install a local folder containing `SKILL.md`. Online skills are downloaded from their public GitHub repositories. Review the source before installing; the app does not execute bundled scripts automatically. ChatGPT can list and read installed skills through the MCP tools. Automatic approval policies are not yet supported. The server advertises the installed skill catalog to compatible MCP clients and asks them to read relevant skills. The client decides whether to use these instructions; the server sends a tool-list change notification when the catalog changes, but reconnect or refresh the custom MCP connection if the client does not refresh its cached descriptions. Skills cannot add tools or execute scripts on their own, so a PDF skill may require capabilities that this server or the client does not provide.
 
 The app creates its own skill library at `~/Library/Application Support/chatgpt-local-workspace/skills` on macOS and displays its location in the app. It does not install skills into Codex's `~/.codex/skills` directory.
 
