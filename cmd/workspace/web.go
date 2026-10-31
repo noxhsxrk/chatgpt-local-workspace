@@ -286,7 +286,7 @@ func (m *webManager) handler() http.Handler {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		info, err := appUpdates.check(r.Context())
+		info, err := appUpdates.check(r.Context(), r.URL.Query().Get("refresh") == "1")
 		if err != nil {
 			http.Error(w, "Could not check for updates.", http.StatusBadGateway)
 			return

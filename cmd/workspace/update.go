@@ -98,10 +98,10 @@ type updateChecker struct {
 	checked time.Time
 }
 
-func (c *updateChecker) check(ctx context.Context) (updateInfo, error) {
+func (c *updateChecker) check(ctx context.Context, force bool) (updateInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.checked.IsZero() && time.Since(c.checked) < 6*time.Hour {
+	if !force && !c.checked.IsZero() && time.Since(c.checked) < 30*time.Minute {
 		return c.info, nil
 	}
 	info, err := fetchUpdate(ctx, releaseHTTPClient, "https://api.github.com/repos/noxhsxrk/chatgpt-local-workspace/releases/latest", appVersion)

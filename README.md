@@ -25,7 +25,7 @@ chatgpt-local-workspace
 
 The OpenAI tunnel client is a dependency. Trust its formula and install it first so Homebrew can resolve it when installing this app. Warnings about other untrusted taps are unrelated to this installation.
 
-The app checks GitHub for new stable releases and shows an update notice when a newer version is available. To update, run `brew update && brew upgrade noxhsxrk/nox/chatgpt-local-workspace`, then restart the app. The Homebrew package may become available shortly after the GitHub release.
+The app checks GitHub for new stable releases and shows the result on the page. Select **Check for updates** to check again. To update, run `brew update && brew upgrade noxhsxrk/nox/chatgpt-local-workspace`, then restart the app. The Homebrew package may become available shortly after the GitHub release.
 
 If the tap or project repository is private, your GitHub account must have access to both repositories and Git must be configured to authenticate with GitHub.
 

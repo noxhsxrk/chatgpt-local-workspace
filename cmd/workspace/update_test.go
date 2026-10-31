@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -37,5 +39,32 @@ func TestUpdateEndpointRequiresToken(t *testing.T) {
 	m.handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status %d", rec.Code)
+	}
+}
+
+func TestUpdateRefreshBypassesCache(t *testing.T) {
+	original := releaseHTTPClient
+	t.Cleanup(func() { releaseHTTPClient = original })
+	calls := 0
+	releaseHTTPClient = &http.Client{Transport: marketRoundTrip(func(r *http.Request) (*http.Response, error) {
+		calls++
+		tag := "v0.2.8"
+		if calls > 1 {
+			tag = "v0.2.9"
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"tag_name":"` + tag + `"}`)), Header: make(http.Header)}, nil
+	})}
+	checker := &updateChecker{}
+	first, err := checker.check(context.Background(), false)
+	if err != nil || first.Available {
+		t.Fatalf("first check: %+v %v", first, err)
+	}
+	cached, err := checker.check(context.Background(), false)
+	if err != nil || cached.Available || calls != 1 {
+		t.Fatalf("cached check: %+v %v calls=%d", cached, err, calls)
+	}
+	fresh, err := checker.check(context.Background(), true)
+	if err != nil || !fresh.Available || fresh.Latest != "0.2.9" || calls != 2 {
+		t.Fatalf("forced check: %+v %v calls=%d", fresh, err, calls)
 	}
 }
