@@ -1,4 +1,4 @@
-# Own MCP Workspace
+# ChatGPT Local Workspace
 
 A small Go MCP server that lets ChatGPT list, read, and write files in a local workspace through OpenAI Secure MCP Tunnel.
 
