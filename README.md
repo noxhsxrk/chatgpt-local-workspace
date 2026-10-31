@@ -20,7 +20,7 @@ brew tap openai/tools
 brew trust --formula openai/tools/tunnel-client
 brew install openai/tools/tunnel-client
 brew install noxhsxrk/nox/chatgpt-local-workspace
-chatgpt-local-workspace
+clw
 ```
 
 The OpenAI tunnel client is a dependency. Trust its formula and install it first so Homebrew can resolve it when installing this app. Warnings about other untrusted taps are unrelated to this installation.
@@ -45,7 +45,7 @@ Open [API keys](https://platform.openai.com/api-keys), create a runtime key with
 
 ### 3. Start the connection
 
-If installed with Homebrew, run `chatgpt-local-workspace`. If using a project checkout, open Terminal in the project directory and run:
+If installed with Homebrew, run `clw` (the original `chatgpt-local-workspace` command also works). If using a project checkout, open Terminal in the project directory and run:
 
    ```bash
    ./start-tunnel.sh
