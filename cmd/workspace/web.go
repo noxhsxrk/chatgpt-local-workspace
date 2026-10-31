@@ -29,6 +29,7 @@ type webManager struct {
 	mu                                sync.Mutex
 	cmd                               *exec.Cmd
 	state, message, workspace, tunnel string
+	name                              string
 	generation                        uint64
 	token                             string
 	binary                            string
@@ -43,6 +44,7 @@ type webManager struct {
 	externalDeleteToken               func(string) error
 }
 type webSettings struct {
+	Name      string `json:"name"`
 	Tunnel    string `json:"tunnel"`
 	Key       string `json:"key"`
 	Workspace string `json:"workspace"`
@@ -98,7 +100,7 @@ func (m *webManager) status(w http.ResponseWriter, r *http.Request) {
 	defer m.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	home, _ := os.UserHomeDir()
-	json.NewEncoder(w).Encode(map[string]any{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home, "has_key": m.key != "", "log_enabled": m.logEnabled})
+	json.NewEncoder(w).Encode(map[string]any{"name": m.name, "state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home, "has_key": m.key != "", "log_enabled": m.logEnabled})
 }
 func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 	var s webSettings
@@ -168,8 +170,17 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 			m.keyStored = true
 		}
 	}
+	oldName := m.name
+	m.name = strings.TrimSpace(s.Name)
+	if len(m.name) > 120 {
+		m.name = oldName
+		m.mu.Unlock()
+		http.Error(w, "Name is too long.", 400)
+		return
+	}
 	if m.saveSettings != nil {
 		if err := m.saveSettings(s.Tunnel, root); err != nil {
+			m.name = oldName
 			m.mu.Unlock()
 			http.Error(w, "Could not save connection settings.", 500)
 			return

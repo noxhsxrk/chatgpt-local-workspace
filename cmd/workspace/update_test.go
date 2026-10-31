@@ -48,9 +48,9 @@ func TestUpdateRefreshBypassesCache(t *testing.T) {
 	calls := 0
 	releaseHTTPClient = &http.Client{Transport: marketRoundTrip(func(r *http.Request) (*http.Response, error) {
 		calls++
-		tag := "v0.2.8"
+		tag := "v" + appVersion
 		if calls > 1 {
-			tag = "v0.2.9"
+			tag = "v999.0.0"
 		}
 		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"tag_name":"` + tag + `"}`)), Header: make(http.Header)}, nil
 	})}
@@ -64,7 +64,7 @@ func TestUpdateRefreshBypassesCache(t *testing.T) {
 		t.Fatalf("cached check: %+v %v calls=%d", cached, err, calls)
 	}
 	fresh, err := checker.check(context.Background(), true)
-	if err != nil || !fresh.Available || fresh.Latest != "0.2.9" || calls != 2 {
+	if err != nil || !fresh.Available || fresh.Latest != "999.0.0" || calls != 2 {
 		t.Fatalf("forced check: %+v %v calls=%d", fresh, err, calls)
 	}
 }

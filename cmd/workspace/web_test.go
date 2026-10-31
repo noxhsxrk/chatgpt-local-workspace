@@ -285,3 +285,26 @@ func TestWebDisplaysCurrentVersion(t *testing.T) {
 		t.Fatal("MCP server version differs from app")
 	}
 }
+
+func TestConnectionNamePersistsAndCanBeChanged(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := updateConnections(savedPreferences{Tunnel: "tunnel_named", Workspace: t.TempDir(), Name: "First"}, false); err != nil {
+		t.Fatal(err)
+	}
+	h := newTunnelHub("csrf", "/tmp/example")
+	r := httptest.NewRequest("POST", "http://127.0.0.1:1234/api/rename?id=tunnel_named", strings.NewReader(`{"name":"  Second  "}`))
+	r.Header.Set("X-Workspace-Token", "csrf")
+	w := httptest.NewRecorder()
+	h.handler().ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("rename: %d %s", w.Code, w.Body)
+	}
+	entries, err := readConnections()
+	if err != nil || len(entries) != 1 || entries[0].Name != "Second" {
+		t.Fatalf("name not persisted: %+v %v", entries, err)
+	}
+	if got := newTunnelHub("csrf", "/tmp/example").sessions["tunnel_named"].name; got != "Second" {
+		t.Fatalf("name not restored: %q", got)
+	}
+}

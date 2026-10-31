@@ -40,6 +40,7 @@ exit(verified ? 0 : 1)`
 }
 
 type savedPreferences struct {
+	Name      string `json:"name,omitempty"`
 	Tunnel    string `json:"tunnel"`
 	Workspace string `json:"workspace"`
 }

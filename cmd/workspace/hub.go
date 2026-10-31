@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -33,6 +34,7 @@ func newTunnelHub(token, binary string) *tunnelHub {
 		}
 		m := h.newSession(entry.Tunnel)
 		m.workspace = entry.Workspace
+		m.name = entry.Name
 		if runtime.GOOS == "darwin" {
 			m.key, _ = loadKeychainAccount(entry.Tunnel)
 			m.keyStored = m.key != ""
@@ -51,7 +53,7 @@ func (h *tunnelHub) newSession(id string) *webManager {
 		m.saveKey = func(key string) error { return saveKeychainAccount(id, key) }
 	}
 	m.saveSettings = func(tunnel, workspace string) error {
-		return updateConnections(savedPreferences{Tunnel: tunnel, Workspace: workspace}, false)
+		return updateConnections(savedPreferences{Tunnel: tunnel, Workspace: workspace, Name: m.name}, false)
 	}
 	return m
 }
@@ -90,6 +92,7 @@ func (h *tunnelHub) handler() http.Handler {
 			h.mu.Unlock()
 			type item struct {
 				Tunnel    string `json:"tunnel"`
+				Name      string `json:"name"`
 				Workspace string `json:"workspace"`
 				State     string `json:"state"`
 			}
@@ -97,7 +100,7 @@ func (h *tunnelHub) handler() http.Handler {
 			for _, m := range list {
 				m.mu.Lock()
 				if m.workspace != "" {
-					items = append(items, item{m.tunnel, m.workspace, m.state})
+					items = append(items, item{m.tunnel, m.name, m.workspace, m.state})
 				}
 				m.mu.Unlock()
 			}
@@ -131,6 +134,44 @@ func (h *tunnelHub) handler() http.Handler {
 			h.mu.Unlock()
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			m.handler().ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == "/api/rename" {
+			if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != h.token {
+				http.Error(w, "Forbidden", 403)
+				return
+			}
+			var input struct {
+				Name string `json:"name"`
+			}
+			if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input) != nil {
+				http.Error(w, "Invalid request", 400)
+				return
+			}
+			input.Name = strings.TrimSpace(input.Name)
+			if len(input.Name) > 120 {
+				http.Error(w, "Name is too long.", 400)
+				return
+			}
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			m := h.sessions[r.URL.Query().Get("id")]
+			if m == nil {
+				http.NotFound(w, r)
+				return
+			}
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if m.workspace == "" {
+				http.NotFound(w, r)
+				return
+			}
+			if err := updateConnections(savedPreferences{Tunnel: m.tunnel, Workspace: m.workspace, Name: input.Name}, false); err != nil {
+				http.Error(w, "Could not save connection name.", 500)
+				return
+			}
+			m.name = input.Name
+			w.WriteHeader(204)
 			return
 		}
 		if r.URL.Path == "/api/remove" {
