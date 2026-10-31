@@ -2,6 +2,8 @@
 
 A small Go MCP server that lets ChatGPT list, read, and write files in a local workspace through OpenAI Secure MCP Tunnel.
 
+Licensed under the [MIT License](LICENSE).
+
 ## Requirements
 
 - macOS and [Homebrew](https://brew.sh/).

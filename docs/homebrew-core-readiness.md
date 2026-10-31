@@ -4,7 +4,7 @@ This document tracks the work needed before proposing `chatgpt-local-workspace` 
 
 ## Upstream requirements
 
-- Publish the upstream source and agree on an open-source license accepted by Homebrew.
+- Publish the upstream source. The project uses the MIT license.
 - Publish a stable, immutable version tag and a versioned source archive. A Homebrew formula can then use its HTTPS URL and SHA-256 checksum.
 - Establish public interest and maintenance history under Homebrew's [package acceptance policy](https://docs.brew.sh/Package-Acceptance-Policy). Confirm the current repository metrics before submitting.
 - Review the entire Git history and screenshots for private information before making the repository public.
