@@ -13,7 +13,7 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v go >/dev/null 2>&1; then
+if [[ -z "${WORKSPACE_MCP_BINARY:-}" ]] && ! command -v go >/dev/null 2>&1; then
   echo "Installing Go with Homebrew..."
   brew install go
 fi
@@ -46,10 +46,15 @@ if [[ -z "$CONTROL_PLANE_API_KEY" ]]; then
 fi
 export CONTROL_PLANE_API_KEY
 
-echo "Running tests..."
-go test ./...
-echo "Building MCP server..."
-go build -o "$PROJECT_DIR/own-mcp-workspace" .
+if [[ -n "${WORKSPACE_MCP_BINARY:-}" ]]; then
+  server_binary="$WORKSPACE_MCP_BINARY"
+else
+  echo "Running tests..."
+  go test ./...
+  echo "Building MCP server..."
+  server_binary="$PROJECT_DIR/own-mcp-workspace"
+  go build -o "$server_binary" .
+fi
 
 # A fresh profile avoids silently replacing an existing user configuration.
 profile="own-workspace-$(date +%Y%m%d%H%M%S)-$$"
@@ -58,7 +63,7 @@ tunnel-client init \
   --sample sample_mcp_stdio_local \
   --profile "$profile" \
   --tunnel-id "$tunnel_id" \
-  --mcp-command "$PROJECT_DIR/own-mcp-workspace"
+  --mcp-command "$server_binary"
 
 echo "Checking tunnel configuration..."
 tunnel-client doctor --profile "$profile" --explain
