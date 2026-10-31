@@ -2,9 +2,8 @@ class ChatgptLocalWorkspace < Formula
   desc "Connect a local workspace to ChatGPT through an MCP tunnel"
   homepage "https://github.com/noxhsxrk/chatgpt-local-workspace"
   url "ssh://git@github.com/noxhsxrk/chatgpt-local-workspace.git",
-      revision: "48b967f4084de996221010e28f9cd75ff652f38c"
-  version "0.1.0"
-  revision 10
+      revision: "31d0b717b530706f0a94be9e207ef01a2d68b292"
+  version "0.2.0"
 
   depends_on "go" => :build
   depends_on "openai/tools/tunnel-client"
@@ -23,6 +22,8 @@ class ChatgptLocalWorkspace < Formula
   test do
     ENV["WORKSPACE_ROOT"] = testpath
     request = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
-    assert_match "own-mcp-workspace", pipe_output(libexec/"workspace-mcp", request + "\n", 0)
+    response = pipe_output(libexec/"workspace-mcp", request + "\n", 0)
+    assert_match "own-mcp-workspace", response
+    assert_match version.to_s, response
   end
 end
