@@ -13,7 +13,7 @@ if [[ -z "${WORKSPACE_MCP_BINARY:-}" ]] && ! command -v go >/dev/null 2>&1; then
   exit 1
 fi
 if ! command -v tunnel-client >/dev/null 2>&1; then
-  echo "OpenAI tunnel-client is required. Run: brew tap openai/tools && brew install openai/tools/tunnel-client" >&2
+  echo "OpenAI tunnel-client is required. Run: brew tap openai/tools && brew trust --formula openai/tools/tunnel-client && brew install openai/tools/tunnel-client" >&2
   exit 1
 fi
 
