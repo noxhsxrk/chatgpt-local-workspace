@@ -408,6 +408,20 @@ func (m *webManager) handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(skills)
 	})
+	mux.HandleFunc("/api/skills/location", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodGet || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		root, err := skillRoot()
+		if err != nil {
+			http.Error(w, "Could not create skill library.", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"path": root})
+	})
 	mux.HandleFunc("/api/marketplace/search", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet || r.Header.Get("X-Workspace-Token") != m.token {

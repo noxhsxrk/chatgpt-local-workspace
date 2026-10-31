@@ -28,7 +28,11 @@ func skillRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(base, "chatgpt-local-workspace", "skills"), nil
+	root := filepath.Join(base, "chatgpt-local-workspace", "skills")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		return "", err
+	}
+	return root, nil
 }
 func validSkillName(name string) bool { return len(name) <= 64 && skillNamePattern.MatchString(name) }
 
@@ -70,6 +74,16 @@ func parseSkillInfo(dir string, data []byte) (skillInfo, error) {
 	if !validSkillName(name) {
 		return skillInfo{}, errors.New("skill folder name must use lowercase letters, numbers, and single hyphens")
 	}
+	skill, err := parseSkillMetadata(data)
+	if err != nil {
+		return skillInfo{}, err
+	}
+	if skill.Name != name {
+		return skillInfo{}, errors.New("SKILL.md name must match its folder")
+	}
+	return skill, nil
+}
+func parseSkillMetadata(data []byte) (skillInfo, error) {
 	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 	if len(lines) < 4 || lines[0] != "---" {
 		return skillInfo{}, errors.New("SKILL.md must start with YAML frontmatter")
@@ -108,13 +122,13 @@ func parseSkillInfo(dir string, data []byte) (skillInfo, error) {
 			}
 		}
 	}
-	if declared != name {
-		return skillInfo{}, errors.New("SKILL.md name must match its folder")
+	if !validSkillName(declared) {
+		return skillInfo{}, errors.New("SKILL.md requires a valid name")
 	}
 	if description == "" || len(description) > 4096 {
 		return skillInfo{}, errors.New("SKILL.md requires a description")
 	}
-	return skillInfo{Name: name, Description: description}, nil
+	return skillInfo{Name: declared, Description: description}, nil
 }
 func listSkills(root string) ([]skillInfo, error) {
 	result := []skillInfo{}

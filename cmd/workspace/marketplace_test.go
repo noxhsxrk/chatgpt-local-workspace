@@ -59,10 +59,38 @@ func TestMarketplaceSearchAndInstall(t *testing.T) {
 	}
 }
 func TestMarketplaceRejectsAmbiguousSkill(t *testing.T) {
-	data := marketZip(t, map[string]string{"repo/a/example-skill/SKILL.md": "a", "repo/b/example-skill/SKILL.md": "b"})
+	data := marketZip(t, map[string]string{"repo/a/example-skill/SKILL.md": "---\nname: example-skill\ndescription: A\n---\n", "repo/b/example-skill/SKILL.md": "---\nname: example-skill\ndescription: B\n---\n"})
 	_, err := installMarketplaceSkill(context.Background(), marketClient(data), "https://codeload.github.com", t.TempDir(), "owner/repo", "example-skill")
-	if err == nil || !strings.Contains(err.Error(), "exactly one") {
+	if err == nil || !strings.Contains(err.Error(), "multiple matching") {
 		t.Fatalf("expected ambiguous error: %v", err)
+	}
+}
+
+func TestMarketplacePrefersStandardSkillDirectory(t *testing.T) {
+	data := marketZip(t, map[string]string{
+		"repo/skills/ponytail/SKILL.md":           "---\nname: ponytail\ndescription: Standard\n---\nstandard",
+		"repo/.openclaw/skills/ponytail/SKILL.md": "---\nname: ponytail\ndescription: OpenClaw\n---\nopenclaw",
+	})
+	root := filepath.Join(t.TempDir(), "skills")
+	_, err := installMarketplaceSkill(context.Background(), marketClient(data), "https://codeload.github.com", root, "DietrichGebert/ponytail", "ponytail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents, err := readSkillFile(root, "ponytail", "")
+	if err != nil || !strings.Contains(contents, "standard") {
+		t.Fatalf("wrong variant: %q %v", contents, err)
+	}
+}
+
+func TestMarketplaceMatchesDeclaredName(t *testing.T) {
+	data := marketZip(t, map[string]string{"repo/collection/different-directory/SKILL.md": "---\nname: example-skill\ndescription: Example\n---\n"})
+	root := filepath.Join(t.TempDir(), "skills")
+	_, err := installMarketplaceSkill(context.Background(), marketClient(data), "https://codeload.github.com", root, "owner/repo", "example-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "example-skill", "SKILL.md")); err != nil {
+		t.Fatal(err)
 	}
 }
 func TestMarketplaceRoutesRequireToken(t *testing.T) {

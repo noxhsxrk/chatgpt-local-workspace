@@ -175,3 +175,30 @@ func TestMCPStdioCanDiscoverAndReadManagedSkills(t *testing.T) {
 		t.Fatalf("missing MCP response: %s", out)
 	}
 }
+
+func TestSkillLibraryIsCreatedAndReported(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	m := &webManager{token: "secret"}
+	req := httptest.NewRequest(http.MethodGet, "/api/skills/location", nil)
+	req.Host = "127.0.0.1:60180"
+	req.Header.Set("X-Workspace-Token", "secret")
+	rec := httptest.NewRecorder()
+	m.handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("location status %d: %s", rec.Code, rec.Body.String())
+	}
+	var location struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &location); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(location.Path)
+	if err != nil || !info.IsDir() {
+		t.Fatalf("skill library not created: %s %v", location.Path, err)
+	}
+	if filepath.Base(location.Path) != "skills" {
+		t.Fatalf("unexpected library %s", location.Path)
+	}
+}

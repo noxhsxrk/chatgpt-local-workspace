@@ -108,51 +108,63 @@ func installMarketplaceSkill(ctx context.Context, client *http.Client, base, roo
 	if len(z.File) > 50000 {
 		return skillInfo{}, errors.New("Repository has too many files.")
 	}
-	// Select a unique matching folder, so the user never installs an arbitrary
-	// duplicate skill from a repository with ambiguous names.
-	candidates := map[string]bool{}
+	// Repositories may contain platform-specific copies. Prefer the conventional
+	// top-level skills/<name> directory; never choose between other duplicates.
+	candidates := map[string]string{}
+	var canonical string
+	metadataBudget := int64(8 << 20)
 	for _, f := range z.File {
 		n := f.Name
-		if path.Clean(n) != n || strings.HasPrefix(n, "/") || strings.Contains(n, "\\") {
+		if path.Clean(n) != n || strings.HasPrefix(n, "/") || strings.Contains(n, "\\") || path.Base(n) != "SKILL.md" || !f.Mode().IsRegular() || f.UncompressedSize64 > maxFileBytes {
 			continue
 		}
-		if path.Base(n) == "SKILL.md" && path.Base(path.Dir(n)) == name {
-			candidates[path.Dir(n)] = true
+		if int64(f.UncompressedSize64) > metadataBudget {
+			return skillInfo{}, errors.New("Repository contains too much skill metadata to inspect.")
+		}
+		metadataBudget -= int64(f.UncompressedSize64)
+		reader, e := f.Open()
+		if e != nil {
+			continue
+		}
+		contents, e := io.ReadAll(io.LimitReader(reader, maxFileBytes+1))
+		_ = reader.Close()
+		if e != nil || len(contents) > maxFileBytes {
+			continue
+		}
+		info, e := parseSkillMetadata(contents)
+		if e != nil {
+			continue
+		}
+		dir := path.Dir(n)
+		if path.Base(dir) != name && info.Name != name {
+			continue
+		}
+		candidates[dir] = info.Name
+		parts := strings.Split(dir, "/")
+		if len(parts) == 3 && parts[1] == "skills" && parts[2] == name {
+			canonical = dir
 		}
 	}
-	// Some repositories are a single skill and keep SKILL.md at the root.
-	// Validate its declared name before treating the repository root as a match.
-	if len(candidates) == 0 {
-		for _, f := range z.File {
-			if path.Base(f.Name) != "SKILL.md" || len(strings.Split(f.Name, "/")) != 2 || f.UncompressedSize64 > maxFileBytes || !f.Mode().IsRegular() {
-				continue
-			}
-			reader, e := f.Open()
-			if e != nil {
-				continue
-			}
-			contents, e := io.ReadAll(io.LimitReader(reader, maxFileBytes+1))
-			_ = reader.Close()
-			if e == nil && len(contents) <= maxFileBytes {
-				if _, e = parseSkillInfo(filepath.Join("/", name), contents); e == nil {
-					candidates[path.Dir(f.Name)] = true
-				}
-			}
+	var selected, installedName string
+	if canonical != "" {
+		selected = canonical
+		installedName = candidates[canonical]
+	} else if len(candidates) == 1 {
+		for dir, skillName := range candidates {
+			selected = dir
+			installedName = skillName
 		}
-	}
-	if len(candidates) != 1 {
-		return skillInfo{}, errors.New("Repository must contain exactly one matching skill folder.")
-	}
-	var selected string
-	for k := range candidates {
-		selected = k
+	} else if len(candidates) == 0 {
+		return skillInfo{}, errors.New("Skill not found in the repository. It may have been moved or removed; check the source on GitHub.")
+	} else {
+		return skillInfo{}, errors.New("The repository contains multiple matching skills and no standard skills/<name> folder. Check the source on GitHub.")
 	}
 	temp, err := os.MkdirTemp("", "workspace-skill-")
 	if err != nil {
 		return skillInfo{}, err
 	}
 	defer os.RemoveAll(temp)
-	folder := filepath.Join(temp, name)
+	folder := filepath.Join(temp, installedName)
 	if err = os.Mkdir(folder, 0700); err != nil {
 		return skillInfo{}, err
 	}
