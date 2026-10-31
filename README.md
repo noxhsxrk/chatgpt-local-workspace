@@ -16,11 +16,13 @@ The project is licensed under the [MIT License](LICENSE). Its Go dependencies ha
 Install and start the app with:
 
 ```bash
-brew tap noxhsxrk/nox
-brew trust --tap noxhsxrk/nox
+brew tap openai/tools
+brew install openai/tools/tunnel-client
 brew install noxhsxrk/nox/chatgpt-local-workspace
 chatgpt-local-workspace
 ```
+
+The OpenAI tunnel client is a dependency. Install it first so Homebrew can trust the specific formula and resolve it when installing this app. Warnings about other untrusted taps are unrelated to this installation.
 
 The app checks GitHub for new stable releases and shows an update notice when a newer version is available. To update, run `brew update && brew upgrade noxhsxrk/nox/chatgpt-local-workspace`, then restart the app. The Homebrew package may become available shortly after the GitHub release.
 
@@ -50,7 +52,7 @@ If installed with Homebrew, run `chatgpt-local-workspace`. If using a project ch
 
 The app opens in your browser automatically. If it does not, open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**. Start with a test folder: the server can read and overwrite files in the selected workspace. Select **Add connection** to configure and run additional tunnels independently.
 
-The launcher starts the local web app. When running from a checkout, install Go and the official OpenAI `tunnel-client` first (`brew install go openai/tools/tunnel-client`). Leave Terminal open; press **Ctrl+C** to stop it. Each tunnel's API key is saved separately in macOS Keychain. Tunnel IDs and workspaces are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
+The launcher starts the local web app. When running from a checkout, install Go and the official OpenAI `tunnel-client` first (`brew tap openai/tools` followed by `brew install go openai/tools/tunnel-client`). Leave Terminal open; press **Ctrl+C** to stop it. Each tunnel's API key is saved separately in macOS Keychain. Tunnel IDs and workspaces are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
 
 Select the eye button next to a saved API key to reveal it after macOS device authentication. Touch ID or the device password can be used when available. This feature requires Apple's Swift command-line tools.
 
