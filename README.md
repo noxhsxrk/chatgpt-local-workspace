@@ -30,9 +30,9 @@ If the tap or project repository is private, your GitHub account must have acces
    ./start-tunnel.sh
    ```
 
-4. Open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**.
+4. The app opens in your browser automatically. If it does not, open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**.
 
-The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. The API key is held in memory while the connection is running and is not saved by the web app. A new tunnel-client profile is created each time you start a connection.
+The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. The API key is saved in macOS Keychain. The tunnel ID and workspace are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
 
 For the interactive terminal flow, run `./start-tunnel.sh --cli` from a project checkout.
 

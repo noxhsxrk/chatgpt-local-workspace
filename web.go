@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -31,6 +32,8 @@ type webManager struct {
 	generation                        uint64
 	token                             string
 	binary                            string
+	key                               string
+	saveKey                           func(string) error
 }
 type webSettings struct {
 	Tunnel    string `json:"tunnel"`
@@ -87,7 +90,7 @@ func (m *webManager) status(w http.ResponseWriter, r *http.Request) {
 	defer m.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	home, _ := os.UserHomeDir()
-	json.NewEncoder(w).Encode(map[string]string{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home})
+	json.NewEncoder(w).Encode(map[string]any{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home, "has_key": m.key != ""})
 }
 func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 	var s webSettings
@@ -95,6 +98,11 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request", 400)
 		return
 	}
+	m.mu.Lock()
+	if s.Key == "" {
+		s.Key = m.key
+	}
+	m.mu.Unlock()
 	if !tunnelPattern.MatchString(s.Tunnel) || strings.TrimSpace(s.Key) == "" || !filepath.IsAbs(s.Workspace) {
 		http.Error(w, "Enter a valid tunnel ID, API key and absolute workspace path.", 400)
 		return
@@ -120,6 +128,21 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Stop the current tunnel first.", 409)
 		return
 	}
+	if m.saveKey != nil {
+		if s.Key != m.key {
+			if err := m.saveKey(s.Key); err != nil {
+				m.mu.Unlock()
+				http.Error(w, "Could not save the API key in macOS Keychain. Check Keychain access and try again.", 500)
+				return
+			}
+		}
+		if err := saveWebPreferences(s.Tunnel, root); err != nil {
+			m.mu.Unlock()
+			http.Error(w, "Could not save connection settings.", 500)
+			return
+		}
+	}
+	m.key = s.Key
 	m.generation++
 	gen := m.generation
 	m.state = "starting"
@@ -250,6 +273,11 @@ func runWeb() {
 		log.Fatal(err)
 	}
 	m := &webManager{state: "stopped", token: hex.EncodeToString(b), binary: binary}
+	if runtime.GOOS == "darwin" {
+		m.saveKey = saveKeychainKey
+		m.key, _ = loadKeychainKey()
+		m.tunnel, m.workspace = loadWebPreferences()
+	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -266,6 +294,12 @@ func runWeb() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Open http://%s in your browser. Press Ctrl+C to stop.\n", listener.Addr())
+	url := fmt.Sprintf("http://%s", listener.Addr())
+	fmt.Printf("Open %s in your browser. Press Ctrl+C to stop.\n", url)
+	if runtime.GOOS == "darwin" {
+		if err := exec.Command("open", url).Start(); err != nil {
+			log.Printf("Could not open browser automatically: %v", err)
+		}
+	}
 	log.Fatal(http.Serve(listener, m.handler()))
 }

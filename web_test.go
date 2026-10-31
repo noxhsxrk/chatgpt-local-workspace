@@ -79,10 +79,28 @@ func TestWebStartStopWithTunnelClient(t *testing.T) {
 		t.Fatalf("stop: %d", w.Code)
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.state != "stopped" || m.cmd != nil {
+		m.mu.Unlock()
 		t.Fatal("tunnel was not stopped")
 	}
+	m.mu.Unlock()
+	r = httptest.NewRequest("GET", "http://127.0.0.1:1234/api/status", nil)
+	w = httptest.NewRecorder()
+	m.handler().ServeHTTP(w, r)
+	if strings.Contains(w.Body.String(), "private-key") {
+		t.Fatal("API key exposed in status")
+	}
+	data, _ = json.Marshal(webSettings{Tunnel: "tunnel_123", Workspace: dir})
+	r = httptest.NewRequest("POST", "http://127.0.0.1:1234/api/start", bytes.NewReader(data))
+	r.Header.Set("X-Workspace-Token", "secret")
+	w = httptest.NewRecorder()
+	m.handler().ServeHTTP(w, r)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("restart without key: %d %s", w.Code, w.Body)
+	}
+	r = httptest.NewRequest("POST", "http://127.0.0.1:1234/api/stop", nil)
+	r.Header.Set("X-Workspace-Token", "secret")
+	m.handler().ServeHTTP(httptest.NewRecorder(), r)
 }
 
 func TestDiagnosticsRedactSecrets(t *testing.T) {
