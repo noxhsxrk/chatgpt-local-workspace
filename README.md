@@ -8,11 +8,23 @@ A small Go MCP server that lets ChatGPT list, read, and write files in a local w
 - An OpenAI Platform account with access to [Tunnels](https://platform.openai.com/settings/organization/tunnels).
 - A ChatGPT account and workspace that can add custom MCP servers.
 
+## Install with Homebrew
+
+After the `noxhsxrk/homebrew-tap` repository has been created and pushed, install and start the app with:
+
+```bash
+brew tap noxhsxrk/tap
+brew install noxhsxrk/tap/chatgpt-local-workspace
+chatgpt-local-workspace
+```
+
+If the tap or project repository is private, your GitHub account must have access to both repositories and Git must be configured to authenticate with GitHub.
+
 ## Setup
 
 1. In [OpenAI Platform](https://platform.openai.com/settings/organization/tunnels), create a tunnel and associate it with your ChatGPT workspace. Save the tunnel ID.
 2. Create a runtime API key with **Tunnels Read + Use** permissions. Keep it private.
-3. Open Terminal in this project directory and run:
+3. Start the app. If installed with Homebrew, run `chatgpt-local-workspace`. If using a project checkout, open Terminal in the project directory and run:
 
    ```bash
    ./start-tunnel.sh
