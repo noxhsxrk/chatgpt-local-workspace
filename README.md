@@ -65,6 +65,8 @@ For troubleshooting, see the [OpenAI Secure MCP Tunnel guide](https://developers
 
 To inspect MCP traffic, enable **Record MCP requests and responses** before starting a connection. Logs can contain file contents or other private information. They are stored in a private temporary file, capped at 2 MiB, and removed when the app exits normally. The log viewer shows up to the most recent 256 KiB. Tunnel traffic does not include ChatGPT model token usage, so the app cannot calculate it.
 
+The optional **MCP traffic estimate** uses the current connection's recorded tool-call arguments and results. It approximates one token per four UTF-8 bytes and applies GPT-6 Luna standard short-context API rates ($0.10 input and $0.50 output per million tokens, checked October 31, 2026). It does not measure actual model usage or charges, and excludes chat history, reasoning, repeated context, caching, and traffic not present in the log. Estimates can be especially inaccurate for Thai and code. Check [current API pricing](https://developers.openai.com/api/docs/pricing) before using the comparison.
+
 If ChatGPT reports that the MCP server is not initialized, make sure only one `tunnel-client` process is using this tunnel, restart the connection, and try a new chat. A running process does not by itself confirm that the tunnel is connected. Also verify that the ChatGPT plugin uses the same tunnel ID and workspace association.
 
 ## Notes

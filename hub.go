@@ -182,7 +182,7 @@ func (h *tunnelHub) handler() http.Handler {
 		m := h.sessions[id]
 		h.mu.Unlock()
 		if m == nil {
-			if id != "" && (r.URL.Path == "/api/stop" || r.URL.Path == "/api/reveal-key" || r.URL.Path == "/api/logs") {
+			if id != "" && (r.URL.Path == "/api/stop" || r.URL.Path == "/api/reveal-key" || r.URL.Path == "/api/logs" || r.URL.Path == "/api/usage") {
 				http.NotFound(w, r)
 				return
 			}

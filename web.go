@@ -336,6 +336,41 @@ func (m *webManager) handler() http.Handler {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write(data)
 	})
+	mux.HandleFunc("/api/usage", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != "GET" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		m.mu.Lock()
+		path := m.auditPath
+		m.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if path == "" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"enabled": false})
+			return
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			http.Error(w, "Could not read request log.", 500)
+			return
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			http.Error(w, "Could not read request log.", 500)
+			return
+		}
+		u, err := estimateMCPUsage(f)
+		if err != nil {
+			http.Error(w, "Could not estimate request log.", 500)
+			return
+		}
+		if info.Size() >= 2<<20 {
+			u.Incomplete = true
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"enabled": true, "estimate": u})
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil || host != "127.0.0.1" {
