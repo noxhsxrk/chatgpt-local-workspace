@@ -73,7 +73,7 @@ The optional **MCP traffic estimate** uses the current connection's recorded too
 
 ## Skills and agent profiles
 
-Open **Agent skills** in the local app to install a trusted local folder containing `SKILL.md`. The app copies the package to its managed library; GitHub installation and automatic approval policies are not yet supported. ChatGPT can list and read installed skills through the MCP tools. Skill instructions are untrusted third-party content and do not grant extra permissions.
+Open **Agent skills** in the local app to search skills.sh or install a local folder containing `SKILL.md`. Online skills are downloaded from their public GitHub repositories. Review the source before installing; the app does not execute bundled scripts automatically. ChatGPT can list and read installed skills through the MCP tools. Automatic approval policies are not yet supported.
 
 Open **Agent profiles** to save reusable instructions for ChatGPT. Profiles do not launch autonomous agents or models and cannot grant additional tool permissions. Do not put secrets in profile instructions. After updating, refresh or recreate the ChatGPT custom MCP connection if its new tools do not appear.
 

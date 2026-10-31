@@ -394,6 +394,46 @@ func (m *webManager) handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(skills)
 	})
+	mux.HandleFunc("/api/marketplace/search", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != http.MethodGet || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		skills, err := marketplaceSearch(r.Context(), marketplaceClient, "https://skills.sh", r.URL.Query().Get("q"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(skills)
+	})
+	mux.HandleFunc("/api/marketplace/install", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		var input struct {
+			Source string `json:"source"`
+			Name   string `json:"name"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&input); err != nil {
+			http.Error(w, "Invalid request.", http.StatusBadRequest)
+			return
+		}
+		root, err := skillRoot()
+		if err != nil {
+			http.Error(w, "Could not locate skill library.", 500)
+			return
+		}
+		skill, err := installMarketplaceSkill(r.Context(), marketplaceClient, "https://codeload.github.com", root, input.Source, input.Name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(skill)
+	})
 	mux.HandleFunc("/api/skills/install", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
 			http.Error(w, "Forbidden", http.StatusForbidden)
