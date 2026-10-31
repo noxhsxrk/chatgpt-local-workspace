@@ -2,9 +2,9 @@ class ChatgptLocalWorkspace < Formula
   desc "Connect a local workspace to ChatGPT through an MCP tunnel"
   homepage "https://github.com/noxhsxrk/chatgpt-local-workspace"
   url "ssh://git@github.com/noxhsxrk/chatgpt-local-workspace.git",
-      revision: "a1e241ca920e714d70fa4f6d2ab29584d937b849"
+      revision: "3b2aff2e65c6407d5fd4e891dbc29309824ee2ea"
   version "0.1.0"
-  revision 3
+  revision 4
 
   depends_on "go" => :build
   depends_on "openai/tools/tunnel-client"
