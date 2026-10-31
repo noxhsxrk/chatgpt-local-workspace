@@ -34,12 +34,17 @@ type webManager struct {
 	binary                            string
 	key                               string
 	saveKey                           func(string) error
+	saveSettings                      func(string, string) error
+	keyStored                         bool
+	auditPath                         string
+	logEnabled                        bool
 	authenticate                      func() error
 }
 type webSettings struct {
 	Tunnel    string `json:"tunnel"`
 	Key       string `json:"key"`
 	Workspace string `json:"workspace"`
+	Log       bool   `json:"log"`
 }
 
 var tunnelPattern = regexp.MustCompile(`^tunnel_[A-Za-z0-9_-]+$`)
@@ -91,7 +96,7 @@ func (m *webManager) status(w http.ResponseWriter, r *http.Request) {
 	defer m.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	home, _ := os.UserHomeDir()
-	json.NewEncoder(w).Encode(map[string]any{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home, "has_key": m.key != ""})
+	json.NewEncoder(w).Encode(map[string]any{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel, "default_workspace": home, "has_key": m.key != "", "log_enabled": m.logEnabled})
 }
 func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 	var s webSettings
@@ -129,21 +134,51 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Stop the current tunnel first.", 409)
 		return
 	}
+	var auditPath string
+	if s.Log {
+		f, err := os.CreateTemp("", "workspace-mcp-log-*.jsonl")
+		if err != nil {
+			m.mu.Unlock()
+			http.Error(w, "Could not create request log.", 500)
+			return
+		}
+		auditPath = f.Name()
+		if err := f.Close(); err != nil {
+			_ = os.Remove(auditPath)
+			m.mu.Unlock()
+			http.Error(w, "Could not create request log.", 500)
+			return
+		}
+	}
+	keepLog := false
+	defer func() {
+		if !keepLog && auditPath != "" {
+			_ = os.Remove(auditPath)
+		}
+	}()
 	if m.saveKey != nil {
-		if s.Key != m.key {
+		if s.Key != m.key || !m.keyStored {
 			if err := m.saveKey(s.Key); err != nil {
 				m.mu.Unlock()
 				http.Error(w, "Could not save the API key in macOS Keychain. Check Keychain access and try again.", 500)
 				return
 			}
+			m.keyStored = true
 		}
-		if err := saveWebPreferences(s.Tunnel, root); err != nil {
+	}
+	if m.saveSettings != nil {
+		if err := m.saveSettings(s.Tunnel, root); err != nil {
 			m.mu.Unlock()
 			http.Error(w, "Could not save connection settings.", 500)
 			return
 		}
 	}
 	m.key = s.Key
+	if m.auditPath != "" {
+		_ = os.Remove(m.auditPath)
+	}
+	m.auditPath, m.logEnabled = auditPath, s.Log
+	keepLog = true
 	m.generation++
 	gen := m.generation
 	m.state = "starting"
@@ -153,7 +188,7 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 	m.mu.Unlock()
 	go func() {
 		profile := fmt.Sprintf("workspace-web-%d", time.Now().UnixNano())
-		env := append(os.Environ(), "CONTROL_PLANE_API_KEY="+s.Key, "WORKSPACE_ROOT="+root)
+		env := append(os.Environ(), "CONTROL_PLANE_API_KEY="+s.Key, "WORKSPACE_ROOT="+root, "WORKSPACE_AUDIT_LOG="+auditPath)
 		init := exec.Command(client, "init", "--sample", "sample_mcp_stdio_local", "--profile", profile, "--tunnel-id", s.Tunnel, "--mcp-command", m.binary)
 		init.Env = env
 		var initLog limitedLog
@@ -277,6 +312,30 @@ func (m *webManager) handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"key": m.key})
 	})
+	mux.HandleFunc("/api/logs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method != "GET" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		m.mu.Lock()
+		path := m.auditPath
+		m.mu.Unlock()
+		if path == "" {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			return
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			http.Error(w, "Could not read request log.", 500)
+			return
+		}
+		if len(data) > 256<<10 {
+			data = data[len(data)-(256<<10):]
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write(data)
+	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil || host != "127.0.0.1" {
@@ -296,23 +355,12 @@ func runWeb() {
 	if _, err = rand.Read(b); err != nil {
 		log.Fatal(err)
 	}
-	m := &webManager{state: "stopped", token: hex.EncodeToString(b), binary: binary}
-	if runtime.GOOS == "darwin" {
-		m.saveKey = saveKeychainKey
-		m.authenticate = authenticateDevice
-		m.key, _ = loadKeychainKey()
-		m.tunnel, m.workspace = loadWebPreferences()
-	}
+	hub := newTunnelHub(hex.EncodeToString(b), binary)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-signals
-		m.mu.Lock()
-		m.generation++
-		if m.cmd != nil && m.cmd.Process != nil {
-			_ = m.cmd.Process.Kill()
-		}
-		m.mu.Unlock()
+		hub.stopAll()
 		os.Exit(0)
 	}()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -326,5 +374,5 @@ func runWeb() {
 			log.Printf("Could not open browser automatically: %v", err)
 		}
 	}
-	log.Fatal(http.Serve(listener, m.handler()))
+	log.Fatal(http.Serve(listener, hub.handler()))
 }

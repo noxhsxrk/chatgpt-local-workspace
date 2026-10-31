@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -143,5 +144,130 @@ func TestEmbeddedGuideImages(t *testing.T) {
 		if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "image/png") || w.Body.Len() == 0 {
 			t.Fatalf("image %s: status %d, content type %s", path, w.Code, w.Header().Get("Content-Type"))
 		}
+	}
+}
+
+func TestMultipleTunnelsRunAndStopIndependently(t *testing.T) {
+	dir := t.TempDir()
+	client := filepath.Join(dir, "tunnel-client")
+	if err := os.WriteFile(client, []byte("#!/bin/sh\nif [ \"$1\" = run ]; then exec sleep 30; fi\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	h := &tunnelHub{sessions: make(map[string]*webManager), token: "csrf", binary: "/tmp/example", draft: &webManager{token: "csrf", state: "stopped"}}
+	for _, id := range []string{"tunnel_one", "tunnel_two"} {
+		m := h.newSession(id)
+		m.saveKey = nil
+		m.saveSettings = func(string, string) error { return nil }
+		h.sessions[id] = m
+	}
+	defer h.stopAll()
+	call := func(path string, body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "http://127.0.0.1:1234"+path, bytes.NewReader(body))
+		r.Header.Set("X-Workspace-Token", "csrf")
+		w := httptest.NewRecorder()
+		h.handler().ServeHTTP(w, r)
+		return w
+	}
+	for _, id := range []string{"tunnel_one", "tunnel_two"} {
+		data, _ := json.Marshal(webSettings{Tunnel: id, Key: "key-" + id, Workspace: dir})
+		if w := call("/api/start", data); w.Code != http.StatusAccepted {
+			t.Fatalf("start %s: %d %s", id, w.Code, w.Body)
+		}
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		both := true
+		for _, m := range h.sessions {
+			m.mu.Lock()
+			both = both && m.state == "running"
+			m.mu.Unlock()
+		}
+		if both {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("connections did not start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if w := call("/api/stop?id=tunnel_one", nil); w.Code != http.StatusNoContent {
+		t.Fatalf("stop: %d", w.Code)
+	}
+	m := h.sessions["tunnel_two"]
+	m.mu.Lock()
+	state, key := m.state, m.key
+	m.mu.Unlock()
+	if state != "running" || key != "key-tunnel_two" {
+		t.Fatal("stopping one tunnel affected the other")
+	}
+}
+
+func TestConnectionsMigrateLegacyAndPersistSeparately(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := saveWebPreferences("tunnel_old", "/tmp/old"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := readConnections()
+	if err != nil || len(entries) != 1 || entries[0].Tunnel != "tunnel_old" {
+		t.Fatalf("legacy settings not loaded: %+v %v", entries, err)
+	}
+	if err := updateConnections(savedPreferences{Tunnel: "tunnel_new", Workspace: "/tmp/new"}, false); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = readConnections()
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("connections not saved: %+v %v", entries, err)
+	}
+	for _, id := range []string{"tunnel_old", "tunnel_new"} {
+		if err := updateConnections(savedPreferences{Tunnel: id}, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err = readConnections()
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("removed legacy connection returned: %+v %v", entries, err)
+	}
+}
+
+func TestMCPLogProcessHelper(t *testing.T) {
+	if os.Getenv("WORKSPACE_TEST_HELPER") != "1" {
+		return
+	}
+	main()
+	os.Exit(0)
+}
+func TestMCPRequestResponseLogging(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "audit.jsonl")
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestMCPLogProcessHelper$")
+	cmd.Env = append(os.Environ(), "WORKSPACE_TEST_HELPER=1", "WORKSPACE_ROOT="+dir, "WORKSPACE_AUDIT_LOG="+path)
+	cmd.Stdin = strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"list_dir\",\"arguments\":{\"path\":\".\"}}}\n")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("server: %s %v", out, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry map[string]json.RawMessage
+	if err = json.Unmarshal(bytes.TrimSpace(data), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(entry["request"], []byte("list_dir")) || !bytes.Contains(entry["response"], []byte("result")) {
+		t.Fatalf("incomplete log: %s", data)
+	}
+}
+func TestLogEndpointRequiresToken(t *testing.T) {
+	m := &webManager{token: "secret"}
+	r := httptest.NewRequest("GET", "http://127.0.0.1:1234/api/logs", nil)
+	w := httptest.NewRecorder()
+	m.handler().ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("unexpected status %d", w.Code)
 	}
 }

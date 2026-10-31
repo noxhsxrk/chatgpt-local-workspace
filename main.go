@@ -237,17 +237,44 @@ func main() {
 		log.Fatal("WORKSPACE_ROOT is not a directory")
 	}
 	s := &server{root: canonical}
+	var audit *os.File
+	if path := os.Getenv("WORKSPACE_AUDIT_LOG"); path != "" {
+		audit, err = os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			log.Fatal("could not open MCP request log")
+		}
+		defer audit.Close()
+	}
+	writeAudit := func(request json.RawMessage, response any) {
+		if audit == nil {
+			return
+		}
+		info, err := audit.Stat()
+		if err != nil || info.Size() >= 2<<20 {
+			return
+		}
+		entry, err := json.Marshal(map[string]any{"request": request, "response": response})
+		if err != nil {
+			return
+		}
+		if len(entry) > 128<<10 {
+			entry = []byte(`{"notice":"Request or response exceeded the log entry limit."}`)
+		}
+		_, _ = audit.Write(append(entry, '\n'))
+	}
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 65536), maxMessageBytes)
 	out := json.NewEncoder(os.Stdout)
 	for scanner.Scan() {
+		raw := append(json.RawMessage(nil), scanner.Bytes()...)
 		var req jsonrpcRequest
 		if err := json.Unmarshal(scanner.Bytes(), &req); err != nil {
 			log.Printf("invalid JSON-RPC: %v", err)
 			continue
 		}
 		if len(req.ID) == 0 {
+			writeAudit(raw, nil)
 			continue
 		} // MCP notifications have no response.
 		result := s.handle(req)
@@ -260,6 +287,7 @@ func main() {
 		if err := out.Encode(response); err != nil {
 			log.Fatal(err)
 		}
+		writeAudit(raw, response)
 	}
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)

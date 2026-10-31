@@ -42,9 +42,9 @@ If installed with Homebrew, run `chatgpt-local-workspace`. If using a project ch
    ./start-tunnel.sh
    ```
 
-The app opens in your browser automatically. If it does not, open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**. Start with a test folder: the server can read and overwrite files in the selected workspace.
+The app opens in your browser automatically. If it does not, open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**. Start with a test folder: the server can read and overwrite files in the selected workspace. Select **Add connection** to configure and run additional tunnels independently.
 
-The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. The API key is saved in macOS Keychain. The tunnel ID and workspace are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
+The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. Each tunnel's API key is saved separately in macOS Keychain. Tunnel IDs and workspaces are saved locally so you can reconnect without entering them again. A new tunnel-client profile is created each time you start a connection.
 
 Select the eye button next to a saved API key to reveal it after macOS device authentication. Touch ID or the device password can be used when available. This feature requires Apple's Swift command-line tools.
 
@@ -62,6 +62,8 @@ For the interactive terminal flow, run `./start-tunnel.sh --cli` from a project 
 The screenshot shows OAuth selected as an example. This server does not provide OAuth; choose no authentication if that option is available, rather than copying the OAuth selection in the image.
 
 For troubleshooting, see the [OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
+
+To inspect MCP traffic, enable **Record MCP requests and responses** before starting a connection. Logs can contain file contents or other private information. They are stored in a private temporary file, capped at 2 MiB, and removed when the app exits normally. The log viewer shows up to the most recent 256 KiB. Tunnel traffic does not include ChatGPT model token usage, so the app cannot calculate it.
 
 If ChatGPT reports that the MCP server is not initialized, make sure only one `tunnel-client` process is using this tunnel, restart the connection, and try a new chat. A running process does not by itself confirm that the tunnel is connected. Also verify that the ChatGPT plugin uses the same tunnel ID and workspace association.
 
