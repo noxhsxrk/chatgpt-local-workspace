@@ -1,3 +1,3 @@
-module example.com/own-mcp-workspace
+module github.com/noxhsxrk/chatgpt-local-workspace
 
 go 1.22

@@ -17,7 +17,7 @@ import (
 
 const maxMessageBytes = 2 << 20
 const maxFileBytes = 256 << 10
-const appVersion = "0.2.0"
+const appVersion = "0.2.1"
 
 type jsonrpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`

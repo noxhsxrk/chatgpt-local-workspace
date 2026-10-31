@@ -8,18 +8,13 @@ if [[ "$(uname -s)" != Darwin ]]; then
   echo "This launcher currently supports macOS only." >&2
   exit 1
 fi
-if ! command -v brew >/dev/null 2>&1; then
-  echo "Homebrew is required. Install it from https://brew.sh/ and run this script again." >&2
+if [[ -z "${WORKSPACE_MCP_BINARY:-}" ]] && ! command -v go >/dev/null 2>&1; then
+  echo "Go is required to build from source. Install Go and run this script again." >&2
   exit 1
 fi
-
-if [[ -z "${WORKSPACE_MCP_BINARY:-}" ]] && ! command -v go >/dev/null 2>&1; then
-  echo "Installing Go with Homebrew..."
-  brew install go
-fi
 if ! command -v tunnel-client >/dev/null 2>&1; then
-  echo "Installing the official OpenAI tunnel-client with Homebrew..."
-  brew install openai/tools/tunnel-client
+  echo "OpenAI tunnel-client is required. Install it with: brew install openai/tools/tunnel-client" >&2
+  exit 1
 fi
 
 if [[ "${1:-}" != "--cli" ]]; then
