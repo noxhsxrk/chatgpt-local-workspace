@@ -216,6 +216,10 @@ func (s *server) handle(req jsonrpcRequest) any {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--web" {
+		runWeb()
+		return
+	}
 	root := os.Getenv("WORKSPACE_ROOT")
 	if root == "" {
 		log.Fatal("WORKSPACE_ROOT must be set to an existing local directory")

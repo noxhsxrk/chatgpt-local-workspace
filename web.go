@@ -1,0 +1,221 @@
+package main
+
+import (
+	"crypto/rand"
+	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+)
+
+//go:embed web/index.html
+var webAssets embed.FS
+
+type webManager struct {
+	mu                                sync.Mutex
+	cmd                               *exec.Cmd
+	state, message, workspace, tunnel string
+	generation                        uint64
+	token                             string
+	binary                            string
+}
+type webSettings struct {
+	Tunnel    string `json:"tunnel"`
+	Key       string `json:"key"`
+	Workspace string `json:"workspace"`
+}
+
+var tunnelPattern = regexp.MustCompile(`^tunnel_[A-Za-z0-9_-]+$`)
+
+func (m *webManager) status(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"state": m.state, "message": m.message, "workspace": m.workspace, "tunnel": m.tunnel})
+}
+func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
+	var s webSettings
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&s); err != nil {
+		http.Error(w, "Invalid request", 400)
+		return
+	}
+	if !tunnelPattern.MatchString(s.Tunnel) || strings.TrimSpace(s.Key) == "" || !filepath.IsAbs(s.Workspace) {
+		http.Error(w, "Enter a valid tunnel ID, API key and absolute workspace path.", 400)
+		return
+	}
+	root, err := filepath.EvalSymlinks(s.Workspace)
+	if err != nil {
+		http.Error(w, "Workspace directory does not exist.", 400)
+		return
+	}
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		http.Error(w, "Workspace must be a directory.", 400)
+		return
+	}
+	client, err := exec.LookPath("tunnel-client")
+	if err != nil {
+		http.Error(w, "tunnel-client not found. Install it with brew install openai/tools/tunnel-client.", 400)
+		return
+	}
+	m.mu.Lock()
+	if m.state == "starting" || m.state == "running" {
+		m.mu.Unlock()
+		http.Error(w, "Stop the current tunnel first.", 409)
+		return
+	}
+	m.generation++
+	gen := m.generation
+	m.state = "starting"
+	m.message = "Preparing tunnel configuration"
+	m.workspace = root
+	m.tunnel = s.Tunnel
+	m.mu.Unlock()
+	go func() {
+		profile := fmt.Sprintf("workspace-web-%d", time.Now().UnixNano())
+		env := append(os.Environ(), "CONTROL_PLANE_API_KEY="+s.Key, "WORKSPACE_ROOT="+root)
+		init := exec.Command(client, "init", "--sample", "sample_mcp_stdio_local", "--profile", profile, "--tunnel-id", s.Tunnel, "--mcp-command", m.binary)
+		init.Env = env
+		// Tunnel client diagnostics may contain sensitive information; do not expose them to the browser.
+		if err := init.Run(); err != nil {
+			m.mu.Lock()
+			if m.generation == gen {
+				m.state = "error"
+				m.message = "Could not create the tunnel profile. Check your tunnel-client installation."
+			}
+			m.mu.Unlock()
+			return
+		}
+		m.mu.Lock()
+		if m.generation != gen {
+			m.mu.Unlock()
+			return
+		}
+		cmd := exec.Command(client, "run", "--profile", profile)
+		cmd.Env = env
+		cmd.Stdout = io.Discard
+		cmd.Stderr = io.Discard
+		if err := cmd.Start(); err != nil {
+			m.state = "error"
+			m.message = "Could not start tunnel-client."
+			m.mu.Unlock()
+			return
+		}
+		m.cmd = cmd
+		m.state = "running"
+		m.message = "Tunnel client is running. Check connectivity in ChatGPT."
+		m.mu.Unlock()
+		err := cmd.Wait()
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if m.generation == gen {
+			m.cmd = nil
+			if err != nil {
+				m.state = "error"
+				m.message = "Tunnel client stopped. Check the ID, API key and network connection."
+			} else {
+				m.state = "stopped"
+				m.message = "Tunnel stopped."
+			}
+		}
+	}()
+	w.WriteHeader(http.StatusAccepted)
+}
+func (m *webManager) stop(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.generation++
+	if m.cmd != nil && m.cmd.Process != nil {
+		_ = m.cmd.Process.Kill()
+		m.cmd = nil
+	}
+	m.state = "stopped"
+	m.message = "Tunnel stopped."
+	w.WriteHeader(http.StatusNoContent)
+}
+func (m *webManager) handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		page, _ := webAssets.ReadFile("web/index.html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+		fmt.Fprint(w, strings.ReplaceAll(string(page), "__CSRF_TOKEN__", m.token))
+	})
+	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			http.Error(w, "Method not allowed", 405)
+			return
+		}
+		m.status(w, r)
+	})
+	mux.HandleFunc("/api/start", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", 403)
+			return
+		}
+		m.start(w, r)
+	})
+	mux.HandleFunc("/api/stop", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.Header.Get("X-Workspace-Token") != m.token {
+			http.Error(w, "Forbidden", 403)
+			return
+		}
+		m.stop(w, r)
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil || host != "127.0.0.1" {
+			http.Error(w, "Forbidden", 403)
+			return
+		}
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		mux.ServeHTTP(w, r)
+	})
+}
+func runWeb() {
+	binary, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	b := make([]byte, 32)
+	if _, err = rand.Read(b); err != nil {
+		log.Fatal(err)
+	}
+	m := &webManager{state: "stopped", token: hex.EncodeToString(b), binary: binary}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-signals
+		m.mu.Lock()
+		m.generation++
+		if m.cmd != nil && m.cmd.Process != nil {
+			_ = m.cmd.Process.Kill()
+		}
+		m.mu.Unlock()
+		os.Exit(0)
+	}()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Open http://%s in your browser. Press Ctrl+C to stop.\n", listener.Addr())
+	log.Fatal(http.Serve(listener, m.handler()))
+}

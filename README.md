@@ -30,9 +30,11 @@ If the tap or project repository is private, your GitHub account must have acces
    ./start-tunnel.sh
    ```
 
-4. Enter the workspace directory, tunnel ID, and runtime API key when prompted. Press Enter to use the default workspace, `~/mcp-demo-workspace`.
+4. Open the local URL printed in Terminal. Enter the tunnel ID, runtime API key, and an existing workspace directory, then select **Start connection**.
 
-The script installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, runs tests, builds the server, and starts the tunnel. Leave Terminal open; press **Ctrl+C** to stop it. A new tunnel-client profile is created each time the script runs.
+The launcher installs Go and the official OpenAI `tunnel-client` with Homebrew if needed, then starts the local web app. Leave Terminal open; press **Ctrl+C** to stop it. The API key is held in memory while the connection is running and is not saved by the web app. A new tunnel-client profile is created each time you start a connection.
+
+For the interactive terminal flow, run `./start-tunnel.sh --cli` from a project checkout.
 
 ## Connect ChatGPT
 

@@ -22,6 +22,16 @@ if ! command -v tunnel-client >/dev/null 2>&1; then
   brew install openai/tools/tunnel-client
 fi
 
+if [[ "${1:-}" != "--cli" ]]; then
+  if [[ -n "${WORKSPACE_MCP_BINARY:-}" ]]; then
+    server_binary="$WORKSPACE_MCP_BINARY"
+  else
+    server_binary="$PROJECT_DIR/own-mcp-workspace"
+    go build -o "$server_binary" .
+  fi
+  exec "$server_binary" --web
+fi
+
 DEFAULT_WORKSPACE="$HOME/mcp-demo-workspace"
 read -r -p "Workspace directory [$DEFAULT_WORKSPACE]: " workspace
 workspace="${workspace:-$DEFAULT_WORKSPACE}"
