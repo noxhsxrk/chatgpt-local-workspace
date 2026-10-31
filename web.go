@@ -267,7 +267,8 @@ func (m *webManager) handler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
-		fmt.Fprint(w, strings.ReplaceAll(string(page), "__CSRF_TOKEN__", m.token))
+		content := strings.ReplaceAll(string(page), "__CSRF_TOKEN__", m.token)
+		fmt.Fprint(w, strings.ReplaceAll(content, "__APP_VERSION__", appVersion))
 	})
 	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {

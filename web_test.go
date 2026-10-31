@@ -271,3 +271,17 @@ func TestLogEndpointRequiresToken(t *testing.T) {
 		t.Fatalf("unexpected status %d", w.Code)
 	}
 }
+
+func TestWebDisplaysCurrentVersion(t *testing.T) {
+	m := &webManager{token: "secret"}
+	r := httptest.NewRequest("GET", "http://127.0.0.1:1234/", nil)
+	w := httptest.NewRecorder()
+	m.handler().ServeHTTP(w, r)
+	if !strings.Contains(w.Body.String(), "v"+appVersion) || strings.Contains(w.Body.String(), "__APP_VERSION__") {
+		t.Fatal("current version is missing from page")
+	}
+	result := (&server{}).handle(jsonrpcRequest{Method: "initialize"}).(map[string]any)
+	if result["serverInfo"].(map[string]any)["version"] != appVersion {
+		t.Fatal("MCP server version differs from app")
+	}
+}

@@ -17,6 +17,7 @@ import (
 
 const maxMessageBytes = 2 << 20
 const maxFileBytes = 256 << 10
+const appVersion = "0.2.0"
 
 type jsonrpcRequest struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -191,7 +192,7 @@ func (s *server) handle(req jsonrpcRequest) any {
 		return map[string]any{
 			"protocolVersion": "2025-06-18",
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "own-mcp-workspace", "version": "0.1.0"},
+			"serverInfo":      map[string]any{"name": "own-mcp-workspace", "version": appVersion},
 		}
 	case "ping":
 		return map[string]any{}
