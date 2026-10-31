@@ -2,11 +2,12 @@
 
 A small Go MCP server that lets ChatGPT list, search, read, and write files in a local workspace through OpenAI Secure MCP Tunnel.
 
-Licensed under the [MIT License](LICENSE).
+The project is licensed under the [MIT License](LICENSE). Its Go dependencies have [separate license terms](third_party_licenses/README.md).
 
 ## Requirements
 
 - macOS and [Homebrew](https://brew.sh/).
+- Go 1.27 or newer when building from source.
 - An OpenAI Platform account with access to [Tunnels](https://platform.openai.com/settings/organization/tunnels).
 - A ChatGPT account and workspace that can add custom MCP servers.
 
@@ -29,13 +30,13 @@ If the tap or project repository is private, your GitHub account must have acces
 
 In [OpenAI Platform](https://platform.openai.com/settings/organization/tunnels), create a tunnel, select your organization and ChatGPT workspace, then save the tunnel ID.
 
-![Create tunnel dialog showing organization and ChatGPT workspace selection](assets/create_tunnel_menu.png)
+![Create tunnel dialog showing organization and ChatGPT workspace selection](cmd/workspace/assets/create_tunnel_menu.png)
 
 ### 2. Create a runtime API key
 
 Open [API keys](https://platform.openai.com/api-keys), create a runtime key with **Tunnels Read + Use** permissions, and save it somewhere secure. The screenshot shows the creation form; select restricted permissions where available.
 
-![Create new secret key dialog](assets/create_api_key_menu.png)
+![Create new secret key dialog](cmd/workspace/assets/create_api_key_menu.png)
 
 ### 3. Start the connection
 
@@ -60,7 +61,7 @@ For the interactive terminal flow, run `./start-tunnel.sh --cli` from a project 
 3. Configure authentication if required, then create the plugin.
 4. Open a chat, select the plugin, and ask it to list the files in your workspace. Confirm that the response contains actual file names.
 
-![ChatGPT Add custom MCP server dialog with Tunnel selected](assets/create_custom_mcp.png)
+![ChatGPT Add custom MCP server dialog with Tunnel selected](cmd/workspace/assets/create_custom_mcp.png)
 
 The screenshot shows OAuth selected as an example. This server does not provide OAuth; choose no authentication if that option is available, rather than copying the OAuth selection in the image.
 
@@ -76,10 +77,18 @@ Open **Agent skills** in the local app to install a trusted local folder contain
 
 Open **Agent profiles** to save reusable instructions for ChatGPT. Profiles do not launch autonomous agents or models and cannot grant additional tool permissions. Do not put secrets in profile instructions. After updating, refresh or recreate the ChatGPT custom MCP connection if its new tools do not appear.
 
+## External MCP servers
+
+In **MCP servers**, add a trusted local stdio server or a Streamable HTTP server. Local commands run directly with the selected workspace as their working directory and the permissions of your user account. Put one argument per line, and name any additional environment variables to pass from the app's own environment. The tunnel runtime key is not passed to local servers.
+
+Remote URLs require HTTPS; plain HTTP is permitted only for localhost. Optional HTTP bearer tokens are saved in macOS Keychain and are not sent across redirects. OAuth login and legacy HTTP/SSE transport are not supported. External servers are available to every tunnel in the app; only add servers you trust.
+
+In ChatGPT, ask it to list configured MCP servers, inspect a server's tools, then use a specific tool. The bridge exposes `mcp_servers_list`, `mcp_server_tools`, and `mcp_server_call`. Tool results are returned as JSON text with a 256 KiB limit. A failed or timed-out call may still have changed data; check the outcome before retrying. Refresh or recreate the ChatGPT connection if these tools are not visible.
+
 If ChatGPT reports that the MCP server is not initialized, make sure only one `tunnel-client` process is using this tunnel, restart the connection, and try a new chat. A running process does not by itself confirm that the tunnel is connected. Also verify that the ChatGPT plugin uses the same tunnel ID and workspace association.
 
 ## Notes
 
 - Start with a test folder without sensitive files. The server can create and overwrite files without its own approval prompt.
-- The MCP tools cannot run shell commands, tests, or project web servers. The server is a prototype, not a production-hardened sandbox.
+- The built-in workspace tools cannot run shell commands, tests, or project web servers. Configured external MCP servers can run code or change data with the privileges you give them. This application is a prototype, not a production-hardened sandbox.
 - Custom MCP access depends on your ChatGPT plan and workspace permissions. The tunnel does not provide unlimited usage.

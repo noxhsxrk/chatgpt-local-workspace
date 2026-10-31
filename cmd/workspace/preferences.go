@@ -182,7 +182,10 @@ func loadKeychainKey() (string, error) {
 	return loadKeychainAccount(keychainAccount)
 }
 func loadKeychainAccount(account string) (string, error) {
-	output, err := exec.Command("/usr/bin/security", "find-generic-password", "-s", keychainService, "-a", account, "-w").Output()
+	return loadKeychainEntry(keychainService, account)
+}
+func loadKeychainEntry(service, account string) (string, error) {
+	output, err := exec.Command("/usr/bin/security", "find-generic-password", "-s", service, "-a", account, "-w").Output()
 	if err != nil {
 		return "", err
 	}
@@ -192,9 +195,12 @@ func saveKeychainKey(key string) error {
 	return saveKeychainAccount(keychainAccount, key)
 }
 func saveKeychainAccount(account, key string) error {
+	return saveKeychainEntry(keychainService, account, key)
+}
+func saveKeychainEntry(service, account, key string) error {
 	// Pass the encoded secret over stdin, never in a command-line argument.
 	cmd := exec.Command("/usr/bin/security", "-i")
-	command := "add-generic-password -U -s " + keychainService + " -a " + account + " -X " + hex.EncodeToString([]byte(key)) + "\n"
+	command := "add-generic-password -U -s " + service + " -a " + account + " -X " + hex.EncodeToString([]byte(key)) + "\n"
 	cmd.Stdin = strings.NewReader(command)
 	var output bytes.Buffer
 	cmd.Stdout = &output
@@ -205,7 +211,7 @@ func saveKeychainAccount(account, key string) error {
 	if strings.Contains(output.String(), "returned ") {
 		return errors.New("keychain update failed")
 	}
-	got, err := loadKeychainAccount(account)
+	got, err := loadKeychainEntry(service, account)
 	if err != nil {
 		return err
 	}

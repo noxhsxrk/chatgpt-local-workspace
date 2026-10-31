@@ -22,7 +22,7 @@ if [[ "${1:-}" != "--cli" ]]; then
     server_binary="$WORKSPACE_MCP_BINARY"
   else
     server_binary="$PROJECT_DIR/own-mcp-workspace"
-    go build -o "$server_binary" .
+    go build -o "$server_binary" ./cmd/workspace
   fi
   exec "$server_binary" --web
 fi
@@ -58,7 +58,7 @@ else
   go test ./...
   echo "Building MCP server..."
   server_binary="$PROJECT_DIR/own-mcp-workspace"
-  go build -o "$server_binary" .
+  go build -o "$server_binary" ./cmd/workspace
 fi
 
 # A fresh profile avoids silently replacing an existing user configuration.

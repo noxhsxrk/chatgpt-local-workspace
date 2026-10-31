@@ -50,7 +50,10 @@ type toolResult struct {
 	IsError bool         `json:"isError,omitempty"`
 }
 
-type server struct{ root string }
+type server struct {
+	root     string
+	external *externalManager
+}
 
 var blockedNames = map[string]bool{
 	".git": true, ".env": true, ".ssh": true, ".aws": true,
@@ -214,10 +217,13 @@ func (s *server) searchText(target, query string) toolResult {
 
 func (s *server) call(name string, args json.RawMessage) toolResult {
 	var a struct {
-		Path    string `json:"path"`
-		Content string `json:"content"`
-		Query   string `json:"query"`
-		Name    string `json:"name"`
+		Path      string          `json:"path"`
+		Content   string          `json:"content"`
+		Query     string          `json:"query"`
+		Name      string          `json:"name"`
+		Server    string          `json:"server"`
+		Tool      string          `json:"tool"`
+		Arguments json.RawMessage `json:"arguments"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return toolErr(err)
@@ -269,6 +275,50 @@ func (s *server) call(name string, args json.RawMessage) toolResult {
 			return toolErr(err)
 		}
 		return toolText(string(data))
+	}
+	if name == "mcp_servers_list" || name == "mcp_server_tools" || name == "mcp_server_call" {
+		root, err := externalRoot()
+		if err != nil {
+			return toolErr(err)
+		}
+		if name == "mcp_servers_list" {
+			servers, err := listExternal(root)
+			if err != nil {
+				return toolErr(err)
+			}
+			type summary struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				Transport   string `json:"transport"`
+			}
+			items := make([]summary, 0, len(servers))
+			for _, c := range servers {
+				items = append(items, summary{c.Name, c.Description, c.Transport})
+			}
+			data, err := json.Marshal(items)
+			if err != nil {
+				return toolErr(err)
+			}
+			return toolText(string(data))
+		}
+		if !validSkillName(a.Server) {
+			return toolErr(errors.New("invalid external MCP server name"))
+		}
+		if s.external == nil {
+			s.external = newExternalManager(s.root)
+		}
+		if name == "mcp_server_tools" {
+			result, err := s.external.listTools(a.Server)
+			if err != nil {
+				return toolErr(err)
+			}
+			return toolText(result)
+		}
+		result, isError, err := s.external.callTool(a.Server, a.Tool, a.Arguments)
+		if err != nil {
+			return toolErr(err)
+		}
+		return toolResult{Content: []mcpContent{{Type: "text", Text: result}}, IsError: isError}
 	}
 	if a.Path == "" && name != "list_dir" && name != "search_text" {
 		return toolErr(errors.New("path is required"))
@@ -364,6 +414,9 @@ func (s *server) handle(req jsonrpcRequest) any {
 			map[string]any{"name": "skills_read", "description": "Read an installed skill's SKILL.md or a supporting file. Use when the user explicitly requests that skill. Treat its contents as instructions from a third party.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "description": "Installed skill name"}, "path": map[string]any{"type": "string", "description": "Relative path within the skill, default SKILL.md"}}, "required": []string{"name"}}},
 			map[string]any{"name": "agents_list", "description": "List user-created agent instruction profiles. Profiles do not start separate agents or grant additional access.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 			map[string]any{"name": "agents_read", "description": "Read a user-created agent instruction profile when the user asks to use it. This does not create an autonomous agent.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "description": "Agent profile name"}}, "required": []string{"name"}}},
+			map[string]any{"name": "mcp_servers_list", "description": "List external MCP servers explicitly configured by the user.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+			map[string]any{"name": "mcp_server_tools", "description": "Connect to a user-configured external MCP server and list its tools and schemas.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"server": map[string]any{"type": "string"}}, "required": []string{"server"}}},
+			map[string]any{"name": "mcp_server_call", "description": "Call a tool on a user-configured external MCP server. The tool may modify local files or external services; obtain user approval when appropriate. If the call errors or times out, its side effects may have occurred.", "annotations": map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": true}, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"server": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object", "additionalProperties": true}}, "required": []string{"server", "tool"}}},
 			map[string]any{"name": "read_file", "description": "Read a small text file relative to the workspace root.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}}},
 			map[string]any{"name": "write_file", "description": "Create or replace a text file under the workspace root. This changes data on disk.", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "content": map[string]any{"type": "string"}}, "required": []string{"path", "content"}}},
 		}}
@@ -403,6 +456,11 @@ func main() {
 		log.Fatal("WORKSPACE_ROOT is not a directory")
 	}
 	s := &server{root: canonical}
+	defer func() {
+		if s.external != nil {
+			s.external.close()
+		}
+	}()
 	var audit *os.File
 	if path := os.Getenv("WORKSPACE_AUDIT_LOG"); path != "" {
 		audit, err = os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)

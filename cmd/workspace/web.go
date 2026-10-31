@@ -39,6 +39,8 @@ type webManager struct {
 	auditPath                         string
 	logEnabled                        bool
 	authenticate                      func() error
+	externalSaveToken                 func(string, string) error
+	externalDeleteToken               func(string) error
 }
 type webSettings struct {
 	Tunnel    string `json:"tunnel"`
@@ -257,6 +259,7 @@ func (m *webManager) stop(w http.ResponseWriter, r *http.Request) {
 }
 func (m *webManager) handler() http.Handler {
 	mux := http.NewServeMux()
+	registerExternalRoutes(mux, m)
 	mux.Handle("/assets/", http.FileServer(http.FS(webAssets)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
