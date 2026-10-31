@@ -1,12 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -39,6 +39,48 @@ type webSettings struct {
 }
 
 var tunnelPattern = regexp.MustCompile(`^tunnel_[A-Za-z0-9_-]+$`)
+var secretPattern = regexp.MustCompile(`(?i)(sk-[a-zA-Z0-9_-]+|bearer\s+[^\s"']+)`)
+
+type limitedLog struct {
+	mu        sync.Mutex
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func (l *limitedLog) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := len(p)
+	available := 16384 - l.buf.Len()
+	if available < len(p) {
+		l.truncated = true
+		if available < 0 {
+			available = 0
+		}
+		p = p[:available]
+	}
+	_, _ = l.buf.Write(p)
+	return n, nil
+}
+func (l *limitedLog) safeMessage(key string) string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	s := l.buf.String()
+	if l.truncated {
+		if i := strings.LastIndex(s, "\n"); i >= 0 {
+			s = s[:i]
+		} else {
+			s = ""
+		}
+	}
+	s = strings.ReplaceAll(s, key, "[redacted]")
+	s = secretPattern.ReplaceAllString(s, "[redacted]")
+	s = strings.TrimSpace(s)
+	if len(s) > 1500 {
+		s = s[len(s)-1500:]
+	}
+	return s
+}
 
 func (m *webManager) status(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
@@ -89,12 +131,16 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 		env := append(os.Environ(), "CONTROL_PLANE_API_KEY="+s.Key, "WORKSPACE_ROOT="+root)
 		init := exec.Command(client, "init", "--sample", "sample_mcp_stdio_local", "--profile", profile, "--tunnel-id", s.Tunnel, "--mcp-command", m.binary)
 		init.Env = env
-		// Tunnel client diagnostics may contain sensitive information; do not expose them to the browser.
+		var initLog limitedLog
+		init.Stdout, init.Stderr = &initLog, &initLog
 		if err := init.Run(); err != nil {
 			m.mu.Lock()
 			if m.generation == gen {
 				m.state = "error"
 				m.message = "Could not create the tunnel profile. Check your tunnel-client installation."
+				if detail := initLog.safeMessage(s.Key); detail != "" {
+					m.message += "\n" + detail
+				}
 			}
 			m.mu.Unlock()
 			return
@@ -104,10 +150,10 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 			m.mu.Unlock()
 			return
 		}
-		cmd := exec.Command(client, "run", "--profile", profile)
+		cmd := exec.Command(client, "run", "--profile", profile, "--health.listen-addr", "127.0.0.1:0")
 		cmd.Env = env
-		cmd.Stdout = io.Discard
-		cmd.Stderr = io.Discard
+		var runLog limitedLog
+		cmd.Stdout, cmd.Stderr = &runLog, &runLog
 		if err := cmd.Start(); err != nil {
 			m.state = "error"
 			m.message = "Could not start tunnel-client."
@@ -126,6 +172,9 @@ func (m *webManager) start(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				m.state = "error"
 				m.message = "Tunnel client stopped. Check the ID, API key and network connection."
+				if detail := runLog.safeMessage(s.Key); detail != "" {
+					m.message += "\n" + detail
+				}
 			} else {
 				m.state = "stopped"
 				m.message = "Tunnel stopped."

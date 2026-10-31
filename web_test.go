@@ -84,3 +84,12 @@ func TestWebStartStopWithTunnelClient(t *testing.T) {
 		t.Fatal("tunnel was not stopped")
 	}
 }
+
+func TestDiagnosticsRedactSecrets(t *testing.T) {
+	var log limitedLog
+	_, _ = log.Write([]byte("failed with arbitrary-private-key and Bearer sk-other-secret"))
+	got := log.safeMessage("arbitrary-private-key")
+	if strings.Contains(got, "arbitrary-private-key") || strings.Contains(got, "sk-other-secret") {
+		t.Fatalf("secret leaked: %s", got)
+	}
+}
